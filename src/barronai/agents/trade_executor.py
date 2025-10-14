@@ -1,5 +1,5 @@
 from __future__ import annotations
-import os, time, json
+import os, json
 from typing import Optional
 import requests
 
@@ -34,7 +34,6 @@ class TradeExecutor:
             "limit_price": round(limit_price,4), "time_in_force": tif
         }
         if self.paper_only or not (self.key_id and self.secret):
-            # paper/dry-run
             return OrderResult({"status":"dry-run","order":payload})
         try:
             return self._post("/v2/orders", payload)

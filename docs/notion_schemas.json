@@ -1,0 +1,11 @@
+{
+  "signals": {
+    "properties": ["Ticker","Pattern","StructureScore","CatalystScore","NarrativeScore","Score","PowerHour","Reasons","Timestamp"]
+  },
+  "positions": {
+    "properties": ["Ticker","Entry","Size","Stop","TP1","TP2","Notes","OpenedAt","ClosedAt","OutcomeR","ExitReason"]
+  },
+  "discovery": {
+    "properties": ["PatternName","Hypothesis","BacktestWinRate","AvgR","MaxDD","Confidence","Decision","Notes","CreatedAt"]
+  }
+}

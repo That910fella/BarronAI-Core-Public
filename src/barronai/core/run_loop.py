@@ -31,7 +31,6 @@ def main():
     ex = TradeExecutor(paper_only=bool(settings.PAPER_ONLY))
 
     for _, row in candidates.iterrows():
-        # placeholder scoring until NLP/narratives are wired
         structure = 0.7
         catalyst  = 0.6
         narrative = 0.4
@@ -50,7 +49,6 @@ def main():
         plan = rk.make_plan(entry=float(row["last"]), atr=float(row.get("atr", 0.0) or 0.0))
         journal_plan(row["ticker"], plan)
 
-        # bracket order (dry-run by default)
         order = ex.submit_bracket(symbol=row["ticker"], qty=plan.size_shares,
                                   entry=float(row["last"]), stop=plan.stop, take=plan.tp1)
         print("ORDER:", order.get("status"), order.get("order", {}))
