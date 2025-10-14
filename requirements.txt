@@ -11,3 +11,8 @@ psycopg2-binary
 SQLAlchemy>=2
 pydantic-settings
 pyyaml
+yfinance
+feedparser
+vaderSentiment
+beautifulsoup4
+tenacity
