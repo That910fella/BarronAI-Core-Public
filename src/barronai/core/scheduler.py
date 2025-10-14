@@ -49,20 +49,14 @@ def tick_once():
         items = news_for(row["ticker"])
         cat = score_catalyst(items)
         sig = sb.build(
-            ticker=row["ticker"],
-            structure_score=0.6,
-            catalyst_score=cat["score"],
-            narrative_score=0.4,
+            ticker=row["ticker"], structure_score=0.6, catalyst_score=cat["score"], narrative_score=0.4,
             reasons={"catalyst_reason": cat["reason"], "examples": cat["examples"][:5]}
         )
         journal_signal(sig)
-
-        # alerts (Notion/Email) when score or tags hit thresholds
         _ = maybe_alert(sig, reasons=sig.reasons)
 
         if not rk.can_enter():
-            print(now_et(), row["ticker"], "blocked by risk/circuit")
-            continue
+            print(now_et(), row["ticker"], "blocked by risk/circuit"); continue
 
         plan = rk.make_plan(entry=float(row["last"]), atr=float(row.get("atr", 0.0) or 0.0))
         journal_plan(row["ticker"], plan)

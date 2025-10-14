@@ -2,6 +2,7 @@ from __future__ import annotations
 import yfinance as yf
 import pandas as pd
 import numpy as np
+from ..float_enricher import pick_float, yahoo_float
 
 def _safe(v, d=None):
     return d if v is None or (isinstance(v, float) and np.isnan(v)) else v
@@ -29,7 +30,7 @@ class YahooProvider:
         rel_volume = 1.0
         spread_pct = 0.8
         return {
-            "ticker": t, "last": last, "volume": volume, "float": float_shares,
+            "ticker": t, "last": last, "volume": volume, "float": pick_float(float_shares, yahoo_float(t)),
             "day_high": day_high, "vwap": vwap, "pct_change": pct_change,
             "spread_pct": spread_pct, "dollar_volume": dollar_volume, "rel_volume": rel_volume,
             "yesterday_volume": 0, "fifty_two_week_high": fifty_two_week_high, "atr": atr,
