@@ -1,15 +1,14 @@
-from loguru import logger
-import time, os
+from .config import settings
+from .logger import setup_logger
+import time
+
+logger = setup_logger()
 
 def heartbeat():
-    logger.info("Barron.AI service booting...")
-    logger.info(f"ENV={os.getenv('ENV', 'dev')}")
+    logger.info(f"Barron.AI booting in ENV={settings.ENV}")
     while True:
         logger.info("heartbeat: Barron.AI is alive")
         time.sleep(10)
 
 if __name__ == "__main__":
-    try:
-        heartbeat()
-    except KeyboardInterrupt:
-        logger.info("Shutting down cleanly.")
+    heartbeat()

@@ -9,3 +9,4 @@ loguru
 schedule
 psycopg2-binary
 SQLAlchemy>=2
+pydantic-settings
