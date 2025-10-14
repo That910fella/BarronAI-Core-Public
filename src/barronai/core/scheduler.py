@@ -11,6 +11,7 @@ from .config import settings
 from ..data.provider import get_provider
 from ..nlp.catalyst_nlp import fetch_news as fetch_yf_news, score_catalyst
 from ..nlp.benzinga import fetch_benzinga
+from ..integrations.alerts import maybe_alert
 
 WATCHLIST = os.getenv("WATCHLIST","AAPL,AMD,TSLA,NVDA,PLTR,SOFI").split(",")
 PROVIDER = os.getenv("PROVIDER","yahoo").lower()
@@ -29,6 +30,7 @@ def tick_once():
     df = market_snapshot()
     if df.empty:
         print(now_et(), "no data"); return
+
     cand = []
     for path in glob.glob("scans/presets/*.yml"):
         preset = load_yaml(path)
@@ -37,8 +39,8 @@ def tick_once():
             cand.append(hits)
     if not cand:
         print(now_et(), "no candidates"); return
-    candidates = pd.concat(cand, ignore_index=True).drop_duplicates(subset=["ticker"])
 
+    candidates = pd.concat(cand, ignore_index=True).drop_duplicates(subset=["ticker"])
     sb = SignalBuilder()
     rk = RiskEngine(RiskConfig(account_equity=float(os.getenv("ACCOUNT_EQUITY","50000"))))
     ex = TradeExecutor(paper_only=bool(settings.PAPER_ONLY))
@@ -55,14 +57,18 @@ def tick_once():
         )
         journal_signal(sig)
 
+        # alerts (Notion/Email) when score or tags hit thresholds
+        _ = maybe_alert(sig, reasons=sig.reasons)
+
         if not rk.can_enter():
+            print(now_et(), row["ticker"], "blocked by risk/circuit")
             continue
+
         plan = rk.make_plan(entry=float(row["last"]), atr=float(row.get("atr", 0.0) or 0.0))
         journal_plan(row["ticker"], plan)
         order = ex.submit_bracket(symbol=row["ticker"], qty=plan.size_shares,
                                   entry=float(row["last"]), stop=plan.stop, take=plan.tp1)
         print(now_et(), row["ticker"], "score=", sig.score, "|", order.get("status"))
-        # (optional) thresholds for Notion/Email will be added after you flip the flags
 
 def run_loop(interval_seconds: int = 60):
     while True:
