@@ -12,48 +12,32 @@ class YahooProvider:
     def _one(self, t: str) -> dict:
         tk = yf.Ticker(t)
         info = tk.fast_info or {}
-        hist = tk.history(period="5d", interval="1m", prepost=False)
         last = float(_safe(info.get("last_price"), np.nan))
         close_prev = float(_safe(info.get("previous_close"), np.nan))
         pct_change = float(np.nan) if np.isnan(last) or np.isnan(close_prev) else (last-close_prev)/close_prev*100.0
         day_high = float(_safe(info.get("day_high"), np.nan))
-        vwap = float(_safe(info.get("last_price"), np.nan))  # crude placeholder; true VWAP needs intraday calc
+        vwap = float(_safe(info.get("last_price"), np.nan))  # placeholder
         volume = int(_safe(info.get("last_volume"), 0))
         fifty_two_week_high = float(_safe(info.get("year_high"), np.nan))
-        # float shares not available free via Yahoo; leave NaN (our scanners tolerate missing)
         float_shares = np.nan
-        # ATR rough: use last 14 closes if available
         try:
             closes = tk.history(period="1mo", interval="1d")["Close"]
             atr = float(closes.diff().abs().rolling(14).mean().iloc[-1])
         except Exception:
             atr = np.nan
-        # dollar volume / rel volume rough estimates for MVP
         dollar_volume = float(last * volume) if last and volume else 0.0
         rel_volume = 1.0
-        spread_pct = 0.8  # placeholder
-
+        spread_pct = 0.8
         return {
-            "ticker": t,
-            "last": last,
-            "volume": volume,
-            "float": float_shares,
-            "day_high": day_high,
-            "vwap": vwap,
-            "pct_change": pct_change,
-            "spread_pct": spread_pct,
-            "dollar_volume": dollar_volume,
-            "rel_volume": rel_volume,
-            "yesterday_volume": 0,
-            "fifty_two_week_high": fifty_two_week_high,
-            "atr": atr,
+            "ticker": t, "last": last, "volume": volume, "float": float_shares,
+            "day_high": day_high, "vwap": vwap, "pct_change": pct_change,
+            "spread_pct": spread_pct, "dollar_volume": dollar_volume, "rel_volume": rel_volume,
+            "yesterday_volume": 0, "fifty_two_week_high": fifty_two_week_high, "atr": atr,
         }
 
     def quote_snapshot(self, tickers):
         rows = []
         for t in tickers:
-            try:
-                rows.append(self._one(t))
-            except Exception:
-                continue
+            try: rows.append(self._one(t))
+            except Exception: continue
         return pd.DataFrame(rows)
