@@ -1,0 +1,7 @@
+name: Low Float HOD
+filters:
+  - field: last       ; op: between ; value: [1.0, 20.0]
+  - field: volume     ; op: ">="    ; value: 100000
+  - field: float      ; op: "<="    ; value: 10000000
+  - field: pct_change ; op: ">="    ; value: 10
+  - expr: "last >= (day_high * 0.98) and last <= day_high"
