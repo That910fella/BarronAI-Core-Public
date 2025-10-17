@@ -20,11 +20,20 @@ app = FastAPI()
 # --- Dynamic broker routes mount ---
 try:
     mount_dynamic_routes(app, ALPACA_CLIENT)
-mount_ping(app)
 except Exception as e:
     import logging
     logging.getLogger(__name__).warning(
         f"failed to mount dynamic broker routes from dashboard.py: {e}"
+    )
+# -----------------------------------
+
+# --- Ping router mount ---
+try:
+    mount_ping(app)
+except Exception as e:
+    import logging
+    logging.getLogger(__name__).warning(
+        f"failed to mount ping router from dashboard.py: {e}"
     )
 # -----------------------------------
 
