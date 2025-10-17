@@ -1,33 +1,12 @@
 from __future__ import annotations
-from barronai.core.routes_broker import ALPACA_CLIENT
-from barronai.core.broker_dyn import mount_dynamic_routes
 from dotenv import load_dotenv
 load_dotenv()
 from fastapi import FastAPI, Body
 from fastapi.responses import HTMLResponse
 import json, os, pathlib, time
 from typing import Any, Dict, List
-from dotenv import load_dotenv
-load_dotenv()
-
-from barronai.core.routes_broker import ALPACA_CLIENT
-from barronai.core.broker_dyn import mount_dynamic_routes
-
 
 app = FastAPI()
-
-# --- Dynamic broker routes mount ---
-try:
-    mount_dynamic_routes(app, ALPACA_CLIENT)
-except Exception as e:
-    import logging
-    logging.getLogger(__name__).warning(
-        f"failed to mount dynamic broker routes from dashboard.py: {e}"
-    )
-# -----------------------------------
-
-
-
 
 # ---- optional DB (best-effort) ----
 try:
@@ -368,151 +347,151 @@ AU = os.getenv("ALPACA_BASE_URL", "https://paper-api.alpaca.markets/v2")
 if Alpaca and AK and AS:
     ALPACA_CLIENT = Alpaca(AU, AK, AS)
 
-# DUP-REMOVED: @app.get("/api/broker/health")
-# DUP-REMOVED: def api_broker_health():
-# DUP-REMOVED:     if not ALPACA_CLIENT:
-# DUP-REMOVED:         return {"ok": False, "error": "alpaca not configured"}
-# DUP-REMOVED:     return ALPACA_CLIENT.health()
-# DUP-REMOVED: 
-# DUP-REMOVED: @app.post("/api/broker/orders")
-# DUP-REMOVED: def api_broker_orders(payload: Dict[str, Any] = Body(...)):
-# DUP-REMOVED:     if not ALPACA_CLIENT:
-# DUP-REMOVED:         return {"ok": False, "error": "alpaca not configured"}
-# DUP-REMOVED:     sym   = str(payload.get("ticker", "")).upper()
-# DUP-REMOVED:     side  = str(payload.get("side", "")).lower()
-# DUP-REMOVED:     qty   = int(payload.get("qty", 0))
-# DUP-REMOVED:     limit = payload.get("limit", None)
-# DUP-REMOVED:     if not sym or side not in ("buy", "sell") or qty <= 0:
-# DUP-REMOVED:         return {"ok": False, "error": "invalid params"}
-# DUP-REMOVED:     return ALPACA_CLIENT.submit_order(sym, side, qty, limit)
-# DUP-REMOVED: 
-# DUP-REMOVED: @app.get("/api/broker/positions")
-# DUP-REMOVED: def api_broker_positions():
-# DUP-REMOVED:     if not ALPACA_CLIENT:
-# DUP-REMOVED:         return {"ok": False, "error": "alpaca not configured"}
-# DUP-REMOVED:     return ALPACA_CLIENT.positions()
-# DUP-REMOVED: # END ALPACA BLOCK
-# DUP-REMOVED: # -------- Alpaca broker extras --------
-# DUP-REMOVED: from typing import Any, Dict, Optional
-# DUP-REMOVED: import os
-# DUP-REMOVED: from fastapi import Body, Path
-# DUP-REMOVED: 
-# DUP-REMOVED: try:
-# DUP-REMOVED:     from .broker_alpaca import Alpaca  # type: ignore
-# DUP-REMOVED: except Exception:
-# DUP-REMOVED:     Alpaca = None  # type: ignore
-# DUP-REMOVED: 
-# DUP-REMOVED: ALPACA_CLIENT: Optional["Alpaca"] = None
-# DUP-REMOVED: AK = os.getenv("ALPACA_KEY_ID")
-# DUP-REMOVED: AS = os.getenv("ALPACA_SECRET_KEY")
-# DUP-REMOVED: AU = os.getenv("ALPACA_BASE_URL", "https://paper-api.alpaca.markets/v2")
-# DUP-REMOVED: if Alpaca and AK and AS:
-# DUP-REMOVED:     ALPACA_CLIENT = Alpaca(AU, AK, AS)
-# DUP-REMOVED: 
-# DUP-REMOVED: @app.get("/api/broker/debug")
-# DUP-REMOVED: def api_broker_debug():
-# DUP-REMOVED:     kid = os.getenv("ALPACA_KEY_ID", "")
-# DUP-REMOVED:     return {
-# DUP-REMOVED:         "base_url": os.getenv("ALPACA_BASE_URL"),
-# DUP-REMOVED:         "key_loaded": bool(kid),
-# DUP-REMOVED:         "key_preview": f"{kid[:4]}...{kid[-4:]}" if kid else None,
-# DUP-REMOVED:     }
-# DUP-REMOVED: 
-# DUP-REMOVED: @app.get("/api/broker/health")
-# DUP-REMOVED: def api_broker_health():
-# DUP-REMOVED:     if not ALPACA_CLIENT:
-# DUP-REMOVED:         return {"ok": False, "error": "alpaca not configured"}
-# DUP-REMOVED:     return ALPACA_CLIENT.health()
-# DUP-REMOVED: 
-# DUP-REMOVED: @app.post("/api/broker/orders")
-# DUP-REMOVED: def api_broker_orders(payload: Dict[str, Any] = Body(...)):
-# DUP-REMOVED:     if not ALPACA_CLIENT:
-# DUP-REMOVED:         return {"ok": False, "error": "alpaca not configured"}
-# DUP-REMOVED:     sym   = str(payload.get("ticker", "")).upper()
-# DUP-REMOVED:     side  = str(payload.get("side", "")).lower()
-# DUP-REMOVED:     qty   = int(payload.get("qty", 0))
-# DUP-REMOVED:     limit = payload.get("limit", None)
-# DUP-REMOVED:     ext   = bool(payload.get("extended_hours", False))
-# DUP-REMOVED:     if not sym or side not in ("buy", "sell") or qty <= 0:
-# DUP-REMOVED:         return {"ok": False, "error": "invalid params"}
-# DUP-REMOVED:     return ALPACA_CLIENT.submit_order(sym, side, qty, limit, extended_hours=ext)
-# DUP-REMOVED: 
-# DUP-REMOVED: @app.get("/api/broker/orders")
-# DUP-REMOVED: def api_broker_list_orders(status: str = "all", limit: int = 50):
-# DUP-REMOVED:     if not ALPACA_CLIENT:
-# DUP-REMOVED:         return {"ok": False, "error": "alpaca not configured"}
-# DUP-REMOVED:     return ALPACA_CLIENT.list_orders(status=status, limit=limit)
-# DUP-REMOVED: 
-# DUP-REMOVED: @app.get("/api/broker/orders/{order_id}")
-# DUP-REMOVED: def api_broker_get_order(order_id: str = Path(...)):
-# DUP-REMOVED:     if not ALPACA_CLIENT:
-# DUP-REMOVED:         return {"ok": False, "error": "alpaca not configured"}
-# DUP-REMOVED:     return ALPACA_CLIENT.get_order(order_id)
-# DUP-REMOVED: 
-# DUP-REMOVED: @app.delete("/api/broker/orders/{order_id}")
-# DUP-REMOVED: def api_broker_cancel_order(order_id: str = Path(...)):
-# DUP-REMOVED:     if not ALPACA_CLIENT:
-# DUP-REMOVED:         return {"ok": False, "error": "alpaca not configured"}
-# DUP-REMOVED:     return ALPACA_CLIENT.cancel_order(order_id)
-# DUP-REMOVED: 
-# DUP-REMOVED: @app.get("/api/broker/positions")
-# DUP-REMOVED: def api_broker_positions():
-# DUP-REMOVED:     if not ALPACA_CLIENT:
-# DUP-REMOVED:         return {"ok": False, "error": "alpaca not configured"}
-# DUP-REMOVED:     return ALPACA_CLIENT.positions()
-# DUP-REMOVED: # -------- Alpaca broker: close/flatten helpers --------
-# DUP-REMOVED: from typing import Any, Dict, Optional
-# DUP-REMOVED: import os
-# DUP-REMOVED: from fastapi import Body, Path, Query
-# DUP-REMOVED: 
-# DUP-REMOVED: try:
-# DUP-REMOVED:     from .broker_alpaca import Alpaca  # type: ignore
-# DUP-REMOVED: except Exception:
-# DUP-REMOVED:     Alpaca = None  # type: ignore
-# DUP-REMOVED: 
-# DUP-REMOVED: # Reuse a single global client if creds exist
-# DUP-REMOVED: ALPACA_CLIENT: Optional["Alpaca"] = None
-# DUP-REMOVED: AK = os.getenv("ALPACA_KEY_ID")
-# DUP-REMOVED: AS = os.getenv("ALPACA_SECRET_KEY")
-# DUP-REMOVED: AU = os.getenv("ALPACA_BASE_URL", "https://paper-api.alpaca.markets/v2")
-# DUP-REMOVED: if Alpaca and AK and AS:
-# DUP-REMOVED:     ALPACA_CLIENT = Alpaca(AU, AK, AS)
-# DUP-REMOVED: 
-# DUP-REMOVED: @app.post("/api/broker/close/{symbol}")
-# DUP-REMOVED: def api_broker_close_position(symbol: str = Path(..., min_length=1)):
-# DUP-REMOVED:     if not ALPACA_CLIENT:
-# DUP-REMOVED:         return {"ok": False, "error": "alpaca not configured"}
-# DUP-REMOVED:     return ALPACA_CLIENT.close_position(symbol)
-# DUP-REMOVED: 
-# DUP-REMOVED: @app.post("/api/broker/flatten")
-# DUP-REMOVED: def api_broker_flatten():
-# DUP-REMOVED:     if not ALPACA_CLIENT:
-# DUP-REMOVED:         return {"ok": False, "error": "alpaca not configured"}
-# DUP-REMOVED:     cancel = ALPACA_CLIENT.cancel_all_orders()
-# DUP-REMOVED:     close  = ALPACA_CLIENT.close_all_positions()
-# DUP-REMOVED:     return {"ok": cancel.get("ok") and close.get("ok"), "cancel": cancel, "close": close}
-# DUP-REMOVED: 
-# DUP-REMOVED: # Optional tidy list/cancel if not present
-# DUP-REMOVED: @app.get("/api/broker/orders")
-# DUP-REMOVED: def api_broker_list_orders(status: str = Query("all"), limit: int = Query(50, ge=1, le=500)):
-# DUP-REMOVED:     if not ALPACA_CLIENT:
-# DUP-REMOVED:         return {"ok": False, "error": "alpaca not configured"}
-# DUP-REMOVED:     return ALPACA_CLIENT.list_orders(status=status, limit=limit)
-# DUP-REMOVED: 
-# DUP-REMOVED: @app.delete("/api/broker/orders/{order_id}")
-# DUP-REMOVED: def api_broker_cancel(order_id: str = Path(..., min_length=8)):
-# DUP-REMOVED:     if not ALPACA_CLIENT:
-# DUP-REMOVED:         return {"ok": False, "error": "alpaca not configured"}
-# DUP-REMOVED:     return ALPACA_CLIENT.cancel_order(order_id)
-# DUP-REMOVED: 
-# DUP-REMOVED: # --- include broker routes (oh-crap panel + APIs)
-# DUP-REMOVED: try:
-# DUP-REMOVED:     from .routes_broker import router as _broker_router  # type: ignore
-# DUP-REMOVED:     app.include_router(_broker_router)
-# DUP-REMOVED: except Exception as _e:
-# DUP-REMOVED:     print("Broker router not loaded:", _e)
-# DUP-REMOVED: from fastapi.responses import HTMLResponse
-# DUP-REMOVED: 
+@app.get("/api/broker/health")
+def api_broker_health():
+    if not ALPACA_CLIENT:
+        return {"ok": False, "error": "alpaca not configured"}
+    return ALPACA_CLIENT.health()
+
+@app.post("/api/broker/orders")
+def api_broker_orders(payload: Dict[str, Any] = Body(...)):
+    if not ALPACA_CLIENT:
+        return {"ok": False, "error": "alpaca not configured"}
+    sym   = str(payload.get("ticker", "")).upper()
+    side  = str(payload.get("side", "")).lower()
+    qty   = int(payload.get("qty", 0))
+    limit = payload.get("limit", None)
+    if not sym or side not in ("buy", "sell") or qty <= 0:
+        return {"ok": False, "error": "invalid params"}
+    return ALPACA_CLIENT.submit_order(sym, side, qty, limit)
+
+@app.get("/api/broker/positions")
+def api_broker_positions():
+    if not ALPACA_CLIENT:
+        return {"ok": False, "error": "alpaca not configured"}
+    return ALPACA_CLIENT.positions()
+# END ALPACA BLOCK
+# -------- Alpaca broker extras --------
+from typing import Any, Dict, Optional
+import os
+from fastapi import Body, Path
+
+try:
+    from .broker_alpaca import Alpaca  # type: ignore
+except Exception:
+    Alpaca = None  # type: ignore
+
+ALPACA_CLIENT: Optional["Alpaca"] = None
+AK = os.getenv("ALPACA_KEY_ID")
+AS = os.getenv("ALPACA_SECRET_KEY")
+AU = os.getenv("ALPACA_BASE_URL", "https://paper-api.alpaca.markets/v2")
+if Alpaca and AK and AS:
+    ALPACA_CLIENT = Alpaca(AU, AK, AS)
+
+@app.get("/api/broker/debug")
+def api_broker_debug():
+    kid = os.getenv("ALPACA_KEY_ID", "")
+    return {
+        "base_url": os.getenv("ALPACA_BASE_URL"),
+        "key_loaded": bool(kid),
+        "key_preview": f"{kid[:4]}...{kid[-4:]}" if kid else None,
+    }
+
+@app.get("/api/broker/health")
+def api_broker_health():
+    if not ALPACA_CLIENT:
+        return {"ok": False, "error": "alpaca not configured"}
+    return ALPACA_CLIENT.health()
+
+@app.post("/api/broker/orders")
+def api_broker_orders(payload: Dict[str, Any] = Body(...)):
+    if not ALPACA_CLIENT:
+        return {"ok": False, "error": "alpaca not configured"}
+    sym   = str(payload.get("ticker", "")).upper()
+    side  = str(payload.get("side", "")).lower()
+    qty   = int(payload.get("qty", 0))
+    limit = payload.get("limit", None)
+    ext   = bool(payload.get("extended_hours", False))
+    if not sym or side not in ("buy", "sell") or qty <= 0:
+        return {"ok": False, "error": "invalid params"}
+    return ALPACA_CLIENT.submit_order(sym, side, qty, limit, extended_hours=ext)
+
+@app.get("/api/broker/orders")
+def api_broker_list_orders(status: str = "all", limit: int = 50):
+    if not ALPACA_CLIENT:
+        return {"ok": False, "error": "alpaca not configured"}
+    return ALPACA_CLIENT.list_orders(status=status, limit=limit)
+
+@app.get("/api/broker/orders/{order_id}")
+def api_broker_get_order(order_id: str = Path(...)):
+    if not ALPACA_CLIENT:
+        return {"ok": False, "error": "alpaca not configured"}
+    return ALPACA_CLIENT.get_order(order_id)
+
+@app.delete("/api/broker/orders/{order_id}")
+def api_broker_cancel_order(order_id: str = Path(...)):
+    if not ALPACA_CLIENT:
+        return {"ok": False, "error": "alpaca not configured"}
+    return ALPACA_CLIENT.cancel_order(order_id)
+
+@app.get("/api/broker/positions")
+def api_broker_positions():
+    if not ALPACA_CLIENT:
+        return {"ok": False, "error": "alpaca not configured"}
+    return ALPACA_CLIENT.positions()
+# -------- Alpaca broker: close/flatten helpers --------
+from typing import Any, Dict, Optional
+import os
+from fastapi import Body, Path, Query
+
+try:
+    from .broker_alpaca import Alpaca  # type: ignore
+except Exception:
+    Alpaca = None  # type: ignore
+
+# Reuse a single global client if creds exist
+ALPACA_CLIENT: Optional["Alpaca"] = None
+AK = os.getenv("ALPACA_KEY_ID")
+AS = os.getenv("ALPACA_SECRET_KEY")
+AU = os.getenv("ALPACA_BASE_URL", "https://paper-api.alpaca.markets/v2")
+if Alpaca and AK and AS:
+    ALPACA_CLIENT = Alpaca(AU, AK, AS)
+
+@app.post("/api/broker/close/{symbol}")
+def api_broker_close_position(symbol: str = Path(..., min_length=1)):
+    if not ALPACA_CLIENT:
+        return {"ok": False, "error": "alpaca not configured"}
+    return ALPACA_CLIENT.close_position(symbol)
+
+@app.post("/api/broker/flatten")
+def api_broker_flatten():
+    if not ALPACA_CLIENT:
+        return {"ok": False, "error": "alpaca not configured"}
+    cancel = ALPACA_CLIENT.cancel_all_orders()
+    close  = ALPACA_CLIENT.close_all_positions()
+    return {"ok": cancel.get("ok") and close.get("ok"), "cancel": cancel, "close": close}
+
+# Optional tidy list/cancel if not present
+@app.get("/api/broker/orders")
+def api_broker_list_orders(status: str = Query("all"), limit: int = Query(50, ge=1, le=500)):
+    if not ALPACA_CLIENT:
+        return {"ok": False, "error": "alpaca not configured"}
+    return ALPACA_CLIENT.list_orders(status=status, limit=limit)
+
+@app.delete("/api/broker/orders/{order_id}")
+def api_broker_cancel(order_id: str = Path(..., min_length=8)):
+    if not ALPACA_CLIENT:
+        return {"ok": False, "error": "alpaca not configured"}
+    return ALPACA_CLIENT.cancel_order(order_id)
+
+# --- include broker routes (oh-crap panel + APIs)
+try:
+    from .routes_broker import router as _broker_router  # type: ignore
+    app.include_router(_broker_router)
+except Exception as _e:
+    print("Broker router not loaded:", _e)
+from fastapi.responses import HTMLResponse
+
 @app.get("/ui/broker", response_class=HTMLResponse)
 def ui_broker():
     return """
@@ -644,6 +623,7 @@ try:
     from .broker_dyn import mount_dynamic_routes  # type: ignore
     # assume the file defines `router` already in dashboard.py (it does)
     from . import broker_dyn as _bd   # only to ensure module loaded
+    mount_dynamic_routes(router, ALPACA_CLIENT)  # uses dashboard's router
 except Exception as _e:
     print("WARN: failed to mount dynamic broker routes from dashboard.py:", _e)
 
@@ -652,5 +632,6 @@ except Exception as _e:
 try:
     from .routes_broker import ALPACA_CLIENT   # reuse the existing client created there
     from .broker_dyn import mount_dynamic_routes
+    mount_dynamic_routes(app, ALPACA_CLIENT)   # mount onto FastAPI app
 except Exception as _e:
     print("WARN: failed to mount dynamic broker routes from dashboard.py:", _e)

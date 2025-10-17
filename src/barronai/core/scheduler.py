@@ -21,10 +21,17 @@ def market_snapshot() -> pd.DataFrame:
     return prov.quote_snapshot(WATCHLIST)
 
 def news_for(ticker: str):
-    bz = fetch_benzinga(ticker, limit=20)
-    if bz:
-        return bz
-    return fetch_yf_news(ticker, limit=15)
+    provider = os.getenv("NEWS_PROVIDER","rss").lower()
+    if provider == "benzinga_direct":
+        from ..nlp.benzinga import fetch_benzinga
+        items = fetch_benzinga(ticker, limit=20) or []
+        return items or fetch_yf_news(ticker, limit=15)
+    elif provider == "polygon_benzinga":
+        from ..nlp.benzinga import fetch_benzinga
+        items = fetch_benzinga(ticker, limit=20) or []
+        return items or fetch_yf_news(ticker, limit=15)
+    else:
+        return fetch_yf_news(ticker, limit=15)
 
 def tick_once():
     df = market_snapshot()
@@ -49,7 +56,7 @@ def tick_once():
         items = news_for(row["ticker"])
         cat = score_catalyst(items)
         sig = sb.build(
-            ticker=row["ticker"], structure_score=0.6, catalyst_score=cat["score"], narrative_score=0.4,
+            ticker=row["ticker"], structure_score=0.6 + (0.1 if (float(row.get("last",0))>=float(row.get("vwap",1)) and float(row.get("last",0))>=float(row.get("ema20",1))) else 0.0), catalyst_score=cat["score"], narrative_score=0.4,
             reasons={"catalyst_reason": cat["reason"], "examples": cat["examples"][:5]}
         )
         journal_signal(sig)

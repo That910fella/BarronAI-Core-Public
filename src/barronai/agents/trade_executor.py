@@ -28,13 +28,20 @@ class TradeExecutor:
         r.raise_for_status()
         return OrderResult(r.json())
 
+    def _log_order(self, payload: dict, status: str):
+        pathlib.Path("tmp/journal").mkdir(parents=True, exist_ok=True)
+        path = "tmp/journal/orders.jsonl"
+        rec = {"ts": time.time(), "status": status, "payload": payload}
+        with open(path, "a", encoding="utf-8") as f:
+            f.write(json.dumps(rec) + "\n")
+
     def submit_limit_buy(self, symbol: str, qty: int, limit_price: float, tif: str="day") -> OrderResult:
         payload = {
             "symbol": symbol, "qty": qty, "side": "buy", "type":"limit",
             "limit_price": round(limit_price,4), "time_in_force": tif
         }
         if self.paper_only or not (self.key_id and self.secret):
-            return OrderResult({"status":"dry-run","order":payload})
+            self._log_order(payload, "dry-run"); return OrderResult({"status":"dry-run","order":payload})
         try:
             return self._post("/v2/orders", payload)
         except Exception as e:
@@ -49,7 +56,7 @@ class TradeExecutor:
             "stop_loss":{"stop_price": round(stop,4)}
         }
         if self.paper_only or not (self.key_id and self.secret):
-            return OrderResult({"status":"dry-run","order":payload})
+            self._log_order(payload, "dry-run"); return OrderResult({"status":"dry-run","order":payload})
         try:
             return self._post("/v2/orders", payload)
         except Exception as e:

@@ -1,0 +1,369 @@
+from __future__ import annotations
+from fastapi import FastAPI, Body
+from fastapi.responses import HTMLResponse
+import json, csv, os, pathlib, time
+from typing import Any, Dict, List
+
+# optional DB
+try:
+    from ..storage.db import session, create_all
+    from ..storage.models import SignalRow, PlanRow
+    HAVE_DB = True
+except Exception:
+    HAVE_DB = False
+
+# metrics snapshot (fallback if missing)
+try:
+    from .metrics import snapshot as metrics_snapshot
+except Exception:
+    def metrics_snapshot():
+        return {"ts": time.time(), "polygon_calls":0, "polygon_429":0, "cache_hits":0, "freshness":0.0}
+
+# optional notifier
+try:
+    from .notify import post as notify
+except Exception:
+    def notify(*args, **kwargs): pass
+
+# helpers
+def _read_jsonl(path: str, limit: int = 200) -> List[Dict[str, Any]]:
+    out=[]
+    if not os.path.exists(path): return out
+    with open(path,"r",encoding="utf-8") as f:
+        for line in f:
+            try: out.append(json.loads(line))
+            except: pass
+    return out[-limit:]
+
+def _read_csv(path: str, limit: int = 200) -> List[Dict[str, Any]]:
+    if not os.path.exists(path): return []
+    with open(path,"r",encoding="utf-8") as f:
+        r = csv.DictReader(f)
+        rows = list(r)
+        return rows[-limit:]
+
+# app
+app = FastAPI()
+pathlib.Path("tmp/journal").mkdir(parents=True, exist_ok=True)
+if HAVE_DB:
+    try: create_all()
+    except Exception: pass
+
+@app.get("/health")
+def health():
+    return {"ok": True}
+
+@app.get("/api/signals")
+def api_signals():
+    return _read_jsonl("tmp/journal/signals.jsonl", limit=200)
+
+@app.get("/api/plans")
+def api_plans():
+    return _read_jsonl("tmp/journal/plans.jsonl", limit=200)
+
+@app.get("/api/orders")
+def api_orders():
+    return _read_jsonl("tmp/journal/orders.jsonl", limit=50)
+
+@app.post("/api/orders/append")
+def api_orders_append(payload: dict = Body(...)):
+    allow = os.getenv('ALLOW_DEV_POSTS','0') in {'1','true','True'}
+    if not allow:
+        return {'ok': False, 'error': 'dev posts disabled (set ALLOW_DEV_POSTS=1)'}
+    pathlib.Path('tmp/journal').mkdir(parents=True, exist_ok=True)
+    import time as _t, json as _json
+    rec = {'ts': _t.time(), 'status': payload.get('status','dry-run'), 'payload': payload}
+    _append_jsonl('tmp/journal/orders.jsonl', rec)
+    # DRY_RUN: simulate fill immediately (working -> filled)
+    try:
+        _append_jsonl('tmp/journal/fills.jsonl', {'ts': rec['ts'], 'state': 'working', 'payload': payload})
+        _append_jsonl('tmp/journal/fills.jsonl', {'ts': rec['ts']+0.1, 'state': 'filled',  'payload': payload})
+        _update_positions_from_fill({'ts': rec['ts']+0.1, 'status': 'filled', 'payload': payload})
+    except Exception:
+        pass
+    try:
+        from .notify import post as notify
+        notify(f"order: {payload.get('side','?')} {payload.get('ticker','?')} x{payload.get('qty','?')} @ {payload.get('limit','?')}", payload)
+    except Exception:
+        pass
+    return {'ok': True}
+    rec = {"ts": time.time(), "status": payload.get("status","dry-run"), "payload": payload}
+    with open("tmp/journal/orders.jsonl","a",encoding="utf-8") as f:
+        f.write(json.dumps(rec) + "\n")
+    try:
+        notify(f"order: {payload.get('side','?')} {payload.get('ticker','?')} x{payload.get('qty','?')} @ {payload.get('limit','?')}", payload)
+    except Exception:
+        pass
+    return {"ok": True}
+
+@app.get("/api/stats")
+def api_stats():
+    return metrics_snapshot()
+
+@app.get("/api/db/summary")
+def api_db_summary():
+    if not HAVE_DB:
+        return {"db": "absent"}
+    try:
+        sigs = session.query(SignalRow).count()
+        plans = session.query(PlanRow).count()
+        return {"signals": sigs, "plans": plans}
+    except Exception:
+        return {"db": "error"}
+
+@app.get("/api/drift")
+def api_drift():
+    path = "tmp/drift.json"
+    if not os.path.exists(path): return {"delta_win_pct": 0, "note": "no drift yet"}
+    try:
+        with open(path,"r",encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return {"delta_win_pct": 0, "note": "bad drift file"}
+
+@app.get("/api/params")
+def api_params():
+    try:
+        from .params import get_params
+        return get_params()
+    except Exception:
+        return {"note":"no params loader"}
+
+
+@app.get("/", response_class=HTMLResponse)
+def home():
+    return """
+<!doctype html>
+<meta charset='utf-8'>
+<title>Barron.AI Dashboard</title>
+<style>
+body{font-family:system-ui,Segoe UI,Arial;margin:20px;background:#fafafa}
+h1{margin:0 0 10px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+.card{background:#fff;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,.06);padding:14px}
+.pill{display:inline-block;padding:6px 10px;border-radius:999px;background:#2ecc71;color:#fff;margin-right:8px;font-size:12px}
+pre{background:#0b1220;color:#b8f4bd;padding:10px;border-radius:10px;max-height:260px;overflow:auto}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{padding:6px 8px;border-bottom:1px solid #eee;text-align:left;white-space:nowrap}
+th{font-weight:600;color:#444}
+.empty{color:#888;font-style:italic}
+.badge{display:inline-block;min-width:20px;text-align:center}
+</style>
+
+<h1>Barron.AI Dashboard</h1>
+<div class="pill" id="drift-pill">drift: …</div>
+<div class="pill" id="params-pill">params…</div>
+
+<div class="grid" style="margin-top:14px">
+  <div class="card">
+    <h3>Signals (latest)</h3>
+    <pre id="signals">loading…</pre>
+  </div>
+  <div class="card">
+    <h3>Plans (latest)</h3>
+    <pre id="plans">loading…</pre>
+  </div>
+  <div class="card">
+    <h3>Recent Orders</h3>
+    <table>
+      <thead><tr><th>When (ET)</th><th>Status</th><th>Ticker</th><th>Side</th><th>Qty</th><th>Limit</th></tr></thead>
+      <tbody id="orders-body"><tr><td class="empty" colspan="6">No orders yet</td></tr></tbody>
+    </table>
+    <div style="font-size:12px;color:#666;margin-top:6px">POST /api/orders/append to add rows.</div>
+  </div>
+  <div class="card">
+    <h3>Stats</h3>
+    <pre id="stats">loading…</pre>
+  </div>
+</div>
+
+<script>
+function fmtTime(ts){ try{ const d=new Date(ts*1000); return d.toLocaleString('en-US',{timeZone:'America/New_York'});}catch(e){return '-'} }
+
+async function loadJSON(url){ const r=await fetch(url); return r.json(); }
+
+async function loadSignals(){ const j=await loadJSON('/api/signals'); document.getElementById('signals').textContent = JSON.stringify(j.slice(-1)[0]||{}, null, 2); }
+async function loadPlans(){ const j=await loadJSON('/api/plans'); document.getElementById('plans').textContent = JSON.stringify(j.slice(-1)[0]||{}, null, 2); }
+async function loadStats(){ const j=await loadJSON('/api/stats'); document.getElementById('stats').textContent = JSON.stringify(j, null, 2); }
+async function loadDrift(){ const d=await loadJSON('/api/drift'); const v = d.delta_win_pct||0; const pill=document.getElementById('drift-pill'); pill.textContent = 'drift: '+v+'%'; pill.style.background = (v < -5 ? '#c0392b' : (v < 0 ? '#f39c12' : '#2ecc71')); }
+async function loadParams(){ const p=await loadJSON('/api/params'); document.getElementById('params-pill').textContent = 'th='+(p.threshold ?? '?')+' w=['+(p?.weights?.structure ?? '?')+','+(p?.weights?.catalyst ?? '?')+','+(p?.weights?.narrative ?? '?')+']'; }
+async function loadOrders(){
+  const j=await loadJSON('/api/orders');
+  const tb = document.getElementById('orders-body');
+  tb.innerHTML = '';
+  if(!j.length){ tb.innerHTML = '<tr><td class="empty" colspan="6">No orders yet</td></tr>'; return; }
+  for(const row of j.slice(-20)) {
+    const p=row.payload||{};
+    const tr=document.createElement('tr');
+    tr.innerHTML = '<td>'+fmtTime(row.ts)+'</td>'+
+                   '<td>'+ (row.status||'') +'</td>'+
+                   '<td>'+ (p.ticker||'') +'</td>'+
+                   '<td>'+ (p.side||'') +'</td>'+
+                   '<td>'+ (p.qty||'') +'</td>'+
+                   '<td>'+ (p.limit||'') +'</td>';
+    tb.appendChild(tr);
+  }
+}
+setInterval(loadSignals, 5000);
+setInterval(loadPlans, 5000);
+setInterval(loadStats, 10000);
+setInterval(loadDrift, 10000);
+setInterval(loadParams, 15000);
+setInterval(loadOrders, 4000);
+loadSignals(); loadPlans(); loadStats(); loadDrift(); loadParams(); loadOrders();
+</script>
+"""
+
+<!doctype html>
+<meta charset="utf-8">
+<title>Barron.AI Dashboard</title>
+<style>
+body{font-family:system-ui,Segoe UI,Arial;margin:20px}
+h1{margin:0 0 10px}
+.pill{display:inline-block;padding:6px 10px;border-radius:12px;background:#333;color:#fff;margin-right:8px;font-size:12px}
+pre{background:#111;color:#0f0;padding:8px;border-radius:8px;max-height:240px;overflow:auto}
+</style>
+<h1>Barron.AI Dashboard</h1>
+<div class="pill" id="drift-pill">drift: …</div>
+<div class="pill" id="params-pill">params…</div>
+<pre id="orders">loading orders…</pre>
+<script>
+async function loadOrders(){ const r=await fetch('/api/orders'); const j=await r.json(); document.getElementById('orders').textContent = JSON.stringify(j.slice(-10), null, 2); }
+async function loadDrift(){ try{ const d=await (await fetch('/api/drift')).json(); const v = d.delta_win_pct||0; const pill=document.getElementById('drift-pill'); pill.textContent = 'drift: '+v+'%'; pill.style.background = (v < -5 ? '#c0392b' : (v < 0 ? '#f39c12' : '#2ecc71')); }catch(e){} }
+async function loadParams(){ try{ const p=await (await fetch('/api/params')).json(); document.getElementById('params-pill').textContent = 'th='+(p.threshold ?? '?')+' w=['+(p?.weights?.structure ?? '?')+','+(p?.weights?.catalyst ?? '?')+','+(p?.weights?.narrative ?? '?')+']'; }catch(e){} }
+setInterval(loadOrders, 5000); setInterval(loadDrift, 10000); setInterval(loadParams, 15000);
+loadOrders(); loadDrift(); loadParams();
+</script>
+"""
+
+
+
+import io
+
+def _append_jsonl(path: str, obj: dict) -> None:
+    pathlib.Path(path).parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "a", encoding="utf-8") as f:
+        f.write(json.dumps(obj) + "\n")
+
+def _load_json(path: str, default):
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return default
+
+def _save_json(path: str, obj) -> None:
+    pathlib.Path(path).parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(obj, f, indent=2)
+
+
+
+@app.get("/api/fills")
+def api_fills():
+    return _read_jsonl("tmp/journal/fills.jsonl", limit=200)
+
+
+
+def _update_positions_from_fill(ev: dict):
+    # ev: {ts, status, payload:{ticker, side, qty, limit}}
+    pth = "tmp/journal/positions.json"
+    pos = _load_json(pth, {})
+    pay = ev.get("payload", {})
+    sym = str(pay.get("ticker","")).upper()
+    side = pay.get("side","").lower()
+    qty  = int(pay.get("qty",0))
+    px   = float(pay.get("limit",0.0))
+    if not sym or qty<=0 or px<=0: 
+        return
+    rec = pos.get(sym, {"qty":0, "avg_price":0.0})
+    q0, p0 = int(rec["qty"]), float(rec["avg_price"])
+    if side == "buy":
+        new_qty = q0 + qty
+        new_avg = ((q0 * p0) + (qty * px)) / new_qty if new_qty else 0.0
+        rec = {"qty": new_qty, "avg_price": round(new_avg, 4)}
+    elif side == "sell":
+        new_qty = q0 - qty
+        if new_qty <= 0:
+            rec = {"qty": 0, "avg_price": 0.0}
+        else:
+            rec = {"qty": new_qty, "avg_price": p0}
+    pos[sym] = rec
+    # prune flats
+    if pos[sym]["qty"] == 0:
+        del pos[sym]
+    _save_json(pth, pos)
+
+@app.get("/api/positions")
+def api_positions():
+    return _load_json("tmp/journal/positions.json", {})
+
+
+
+@app.get("/api/risk")
+def api_risk():
+    import math
+    import os
+    try:
+        import yfinance as yf
+    except Exception:
+        yf = None
+
+    cfg = {
+        "max_exposure": float(os.getenv("MAX_EXPOSURE_USD","50000") or 0),
+        "per_name_cap": float(os.getenv("PER_NAME_CAP_USD","15000") or 0),
+        "risk_atr_mult": float(os.getenv("RISK_ATR_MULT","1.0") or 1.0),
+    }
+    pos = _load_json("tmp/journal/positions.json", {})
+    syms = list(pos.keys())
+    prices = {}
+
+    if yf and syms:
+        try:
+            data = yf.download(tickers=" ".join(syms), period="1d", interval="1m", progress=False, auto_adjust=False, prepost=False)
+            # normalize possible multiindex
+            import pandas as pd
+            if isinstance(data.columns, pd.MultiIndex) and len(syms)==1:
+                data = data.xs(syms[0], axis=1, level=-1)
+            if "Close" in data.columns and not data["Close"].empty:
+                last = data["Close"].iloc[-1]
+                if isinstance(last, float):
+                    for k in syms: prices[k]=last
+                else:
+                    for k in syms:
+                        try: prices[k] = float(last.get(k, float("nan")))
+                        except: pass
+        except Exception:
+            pass
+
+    # compute exposure & simple atr sizing hint (use 1% of price if ATR missing)
+    rows, total_exposure = [], 0.0
+    for sym, rec in pos.items():
+        qty = int(rec.get("qty",0))
+        avg = float(rec.get("avg_price",0.0))
+        mkt = float(prices.get(sym, avg))
+        expo = qty * mkt
+        pnl  = qty * (mkt - avg)
+        total_exposure += expo
+        atr_hint = max(0.01 * mkt, 0.01)  # crude fallback
+        # per-name risk sizing (Naive: dollar risk = atr_mult*atr; position size for $500 risk, if set)
+        dollar_risk = cfg["risk_atr_mult"] * atr_hint
+        rec_out = {
+            "symbol": sym, "qty": qty, "avg_price": round(avg,4),
+            "last": round(mkt,4), "exposure": round(expo,2),
+            "unreal_pnl": round(pnl,2), "atr_hint": round(atr_hint,4),
+            "dollar_risk_per_share": round(dollar_risk,4),
+        }
+        rows.append(rec_out)
+
+    summary = {
+        "total_exposure": round(total_exposure,2),
+        "max_exposure": cfg["max_exposure"],
+        "per_name_cap": cfg["per_name_cap"],
+        "risk_atr_mult": cfg["risk_atr_mult"],
+        "breach": {
+            "exposure": bool(cfg["max_exposure"] and total_exposure > cfg["max_exposure"]),
+            "per_name": [r["symbol"] for r in rows if cfg["per_name_cap"] and r["exposure"] > cfg["per_name_cap"]],
+        },
+    }
+    return {"positions": rows, "summary": summary}

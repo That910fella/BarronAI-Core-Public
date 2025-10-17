@@ -1,6 +1,8 @@
 from __future__ import annotations
 import json, csv, os
 from dataclasses import asdict
+from ..storage.db import session
+from ..storage.models import SignalRow, PlanRow
 from datetime import datetime
 from typing import Any
 
@@ -30,6 +32,9 @@ def journal_signal(signal, where="tmp/journal/signals.jsonl"):
         "gated_power_hour": signal.gated,
     }
     log_jsonl(where, rec)
+    try:
+        with session() as db: db.add(SignalRow(ticker=signal.ticker, score=signal.score, gated=signal.gated, breakdown=signal.breakdown, reasons=signal.reasons))
+    except Exception: pass
 
 def journal_plan(ticker: str, plan, where="tmp/journal/plans.csv"):
     rec = {
@@ -42,3 +47,6 @@ def journal_plan(ticker: str, plan, where="tmp/journal/plans.csv"):
         "notes": plan.notes,
     }
     log_csv(where, rec)
+    try:
+        with session() as db: db.add(PlanRow(ticker=ticker, size=plan.size_shares, entry=float(plan.tp1 - (plan.tp1-plan.stop)/2), stop=plan.stop, tp1=plan.tp1, tp2=plan.tp2, notes=plan.notes))
+    except Exception: pass

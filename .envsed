@@ -1,0 +1,4 @@
+ALPACA_BASE_URL=https://paper-api.alpaca.markets/v2 -i /^ALPACA_KEY_ID=/d .env
+ALPACA_BASE_URL=https://paper-api.alpaca.markets/v2 -i /^ALPACA_KEY_ID=/d .env
+ALPACA_BASE_URL=https://paper-api.alpaca.markets/v2 -i /^ALPACA_KEY_ID=/d .env
+ALPACA_BASE_URL=https://paper-api.alpaca.markets/v2 -i /^ALPACA_KEY_ID=/d .env

@@ -1,0 +1,6 @@
+name: VWAP Hold
+filters:
+  - field: last       ; op: between ; value: [1.0, 20.0]
+  - field: pct_change ; op: ">="    ; value: 10
+  - field: volume     ; op: ">="    ; value: 1000000
+  - expr: "abs((last - vwap) / vwap) <= 0.02"

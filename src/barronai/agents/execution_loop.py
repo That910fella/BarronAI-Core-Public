@@ -1,11 +1,13 @@
 from __future__ import annotations
 import os, math, requests, pandas as pd
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from .position_manager import Position, trail_stop_to_vwap
 
 POLY_API = "https://api.polygon.io"
 
+@retry(reraise=True, stop=stop_after_attempt(5), wait=wait_exponential(multiplier=0.5, max=8), retry=retry_if_exception_type(Exception))
 def _get(path: str, params: dict | None=None):
     params = params or {}
     params["apiKey"] = os.getenv("POLYGON_API_KEY","")
