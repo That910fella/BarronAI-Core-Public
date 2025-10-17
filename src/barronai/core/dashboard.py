@@ -1,3 +1,4 @@
+from barronai.core.broker_dyn_ping import mount_ping
 from __future__ import annotations
 from barronai.core.routes_broker import ALPACA_CLIENT
 from barronai.core.broker_dyn import mount_dynamic_routes
@@ -19,6 +20,7 @@ app = FastAPI()
 # --- Dynamic broker routes mount ---
 try:
     mount_dynamic_routes(app, ALPACA_CLIENT)
+mount_ping(app)
 except Exception as e:
     import logging
     logging.getLogger(__name__).warning(

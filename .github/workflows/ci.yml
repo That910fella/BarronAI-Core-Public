@@ -1,0 +1,31 @@
+name: ci
+on:
+  push:
+  pull_request:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt || true
+          pip install black ruff uvicorn fastapi pydantic requests jq
+      - name: Lint & format
+        run: |
+          ruff check .
+          black --check .
+      - name: Run app (background)
+        env:
+          PORT: 8010
+        run: |
+          make dash &
+          sleep 3
+      - name: Smoke
+        env:
+          BROKER_API_KEY: ${{ secrets.BROKER_API_KEY }}
+        run: ./scripts/smoke.sh
