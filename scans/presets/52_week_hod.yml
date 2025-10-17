@@ -1,5 +1,0 @@
-name: 52-Week HOD
-filters:
-  - field: last              ; op: ">" ; value: 1.0
-  - field: yesterday_volume  ; op: ">" ; value: 1000000
-  - expr: "last >= (fifty_two_week_high * 0.98) and last <= fifty_two_week_high"
